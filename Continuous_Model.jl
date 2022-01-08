@@ -1,5 +1,6 @@
 using LinearAlgebra
 using TensorOperations
+using Einsum
 
 mutable struct Position
     x::Float64;
@@ -20,6 +21,8 @@ struct Systm
     patterns::Array;
     bc::String;
     L::Float64;
+    Tpas::Float64;
+    Tact::Float64;
 end
 
 """
@@ -65,11 +68,12 @@ function find_neighbors(spin::Spin, systm::Systm, spinlist::Array{Spin})
             push!(neighbor_list, spinlist[i].label);
         end
     end
+    pushfirst!(neighbor_list, spin.label);
     return neighbor_list
 end
 
 function connection_matrices(spin::Spin, systm::Systm)
-    local_spins = pushfirst!(spin.neighbors, spin.label);
+    local_spins = spin.neighbors;
     local_pats = systm.patterns[:, local_spins];
     l = length(local_spins);
     Jij = zeros(Float64, l, l);
@@ -77,5 +81,13 @@ function connection_matrices(spin::Spin, systm::Systm)
     Jij[diagind(Jij)] .= 0.0;
     Jij = (1/l)*Jij;
     Jij = Jij[1, :];
-    return Jij
+
+    Jijkl = zeros(Float64, l, l, l, l);
+    @einsum Jijkl[a,b,c,d] = local_pats[i, a]*local_pats[i, b]*local_pats[i, c]*local_pats[i, d];
+    Jijkl = (1/(l*l*l))*Jijkl;
+    Jijkl = Jijkl[1,:,:,:]
+    return Jij, Jijkl
 end
+
+
+

@@ -2,7 +2,8 @@ using TensorOperations
 using LinearAlgebra
 using Distributions
 using DataStructures
-include("Sphr_Model.jl")
+using Einsum
+include("Continuous_Model.jl")
 
 L = 10;
 r = 3.5;
@@ -38,5 +39,5 @@ for i in 1:N
 end
 
 for i in 1:5
-    spinlist[i].Jij = connection_matrices(spinlist[i], systm);
+    spinlist[i].Jij, spinlist[i].Jijkl = connection_matrices(spinlist[i], systm);
 end
