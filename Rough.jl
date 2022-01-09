@@ -7,7 +7,7 @@ include("Continuous_Model.jl")
 
 L = 10;
 r = 3.5;
-N = 100;
+N = 50;
 Tpas = 0.35;
 Tact = 0.65;
 tau = 5.0;
@@ -42,7 +42,7 @@ spinlist = Array{Spin}(undef, N);
 for i in 1:N
     pos = Position(positions[i][1], positions[i][2]);
     #push!(spinlist, Spin(i,pos,vals[i],r,Array{Int8}(undef,), Array{Float64}(undef,), Array{Float64}(undef,)));
-    spin = Spin(i,pos,vals[i], r, Array{Int8}(undef,), Array{Float64}(undef,), Array{Float64}(undef,), etalist[i]);
+    spin = Spin(i,pos,vals[i], r, Array{Int8}(undef,), Array{Float64}(undef,), Array{Float64}(undef,), Array{Float64}(undef,), etalist[i]);
     spinlist[i] = spin;
 end
 
@@ -50,6 +50,8 @@ for i in 1:N
     spinlist[i].neighbors = find_neighbors(spinlist[i], systm, spinlist);
 end
 
-for i in 1:5
-    spinlist[i].Jij, spinlist[i].Jijkl = connection_matrices(spinlist[i], systm);
+for i in 1:N
+    spinlist[i].Jij, spinlist[i].Jijkl, spinlist[i].Jij_flag = connection_matrices_raw(spinlist[i], systm);
 end
+
+spinlist = connection_matrices(spinlist, systm);

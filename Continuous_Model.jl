@@ -14,6 +14,7 @@ mutable struct Spin
     r::Float64;
     neighbors::Array;
     Jij::Array;
+    Jij_flag::Array;
     Jijkl::Array;
     eta::Float64
 end
@@ -76,7 +77,7 @@ function find_neighbors(spin::Spin, systm::Systm, spinlist::Array{Spin})
     return neighbor_list
 end
 
-function connection_matrices(spin::Spin, systm::Systm)
+function connection_matrices_raw(spin::Spin, systm::Systm)
     local_spins = spin.neighbors;
     local_pats = systm.patterns[:, local_spins];
     l = length(local_spins);
@@ -85,13 +86,48 @@ function connection_matrices(spin::Spin, systm::Systm)
     Jij[diagind(Jij)] .= 0.0;
     Jij = (1/l)*Jij;
     Jij = Jij[1, :];
+    Jij_flag = 0*Jij;
 
     Jijkl = zeros(Float64, l, l, l, l);
     @einsum Jijkl[a,b,c,d] = local_pats[i, a]*local_pats[i, b]*local_pats[i, c]*local_pats[i, d];
     Jijkl = (1/(l*l*l))*Jijkl;
     Jijkl = Jijkl[1,:,:,:]
-    return Jij, Jijkl
+    return Jij, Jijkl, Jij_flag
 end
+
+function averaged_Jij(spin1::Spin, spin2::Spin)
+    x1 = findall(a->a==spin2.label, spin1.neighbors);
+    x2 = findall(a->a==spin1.label, spin2.neighbors);
+    if x1==[] || spin1.Jij[x1] == 1
+        return spin1, spin2;
+    else
+        Jij12 = (spin1.Jij[x1] + spin2.Jij[x2])/2;
+        spin1.Jij[x1] = Jij12;
+        spin2.Jij[x2] = Jij12;
+        spin1.Jij_flag[x1] .= 1;
+        spin2.Jij_flag[x2] .= 1;
+        return spin1, spin2
+    end
+end
+
+#function averaged_Jijkl(spin1::Spin, spin2::Spin, spin3::Spin, spin4::Spin)
+#    x12 = findall(a->a==spin2.label, spin1.neighbors)
+
+
+function connection_matrices(spinlist::Array{Spin}, systm::Systm)
+    N = systm.N;
+    for i in 1:N
+        for j in 1:N
+            spinlist[i], spinlist[j] = averaged_Jij(spinlist[i], spinlist[j]);
+        end
+    end
+    return spinlist
+end
+
+
+
+
+
 
 function update_spin(spin::Spin, systm::Systm, spinlist::Array{Spin}, dt)
     N = systm.N;
