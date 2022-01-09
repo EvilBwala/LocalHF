@@ -15,14 +15,23 @@ mutable struct Spin
     neighbors::Array;
     Jij::Array;
     Jijkl::Array;
+    eta::Float64
 end
 
+struct Activation_function
+    function_type::Function
+    steepness::Float64
+end
 struct Systm
+    N::Int64
     patterns::Array;
     bc::String;
     L::Float64;
     Tpas::Float64;
     Tact::Float64;
+    tau::Float64;
+    resistance::Float64
+    activation::Activation_function
 end
 
 """
@@ -33,11 +42,6 @@ function logistic_activation(u::Array, steepness::Float64)
     return f_u;
 end
 
-
-struct Activation_function
-    function_type::Function
-    steepness::Float64
-end
 
 function distance(spin1::Spin, spin2::Spin, systm::Systm)::Float64
     L = systm.L;
@@ -89,5 +93,36 @@ function connection_matrices(spin::Spin, systm::Systm)
     return Jij, Jijkl
 end
 
+function update_spin(spin::Spin, systm::Systm, spinlist::Array{Spin}, dt)
+    N = systm.N;
+    #-------------------------------------------------------------------------------------------------
+    # Update the whitenoise and AOUP noise in the system
+    mu = zeros(Float64, N);
+    sigma = Matrix{Float64}(I, N, N);
+    d = MvNormal(mu, sigma);
+    whitenoise = sqrt(2*systm.Tpas)*rand(d, 1);
+    aoup_noise = sqrt(2*systm.Tact)*rand(d, 1);
+    eta_state = [i.eta for i in spinlist];
+    eta_new = (systm.tau/(systm.tau + dt))*eta_state + (1/(systm.tau + dt))*aoup_noise*sqrt(dt);
+    for i in 1:N
+        spinlist[i].eta = eta_new[i]
+    end
+    #-------------------------------------------------------------------------------------------------
+    
+    Jij = spin.Jij;
+    Jijkl = spin.Jijkl;
+    local_spins = spinlist[spin.neighbors];
+    
+
+    local_state = [i.val for i in local_spins];
+    local_state_v = systm.activation.function_type(local_state, systm.activation.steepness)
+    @tensor begin force1 = local_state_v[a]*Jij[a]; end
+    @tensoropt begin force2 = Jijkl[a,b,c]*local_state_v[a]*local_state_v[b]*local_state_v[c]; end
+    force = force1 + force2;
+    spin.val = spin.val - dt*(force - spin.val/systm.resistance) + whitenoise[spin.label]*sqrt(dt) + spin.eta*dt; 
+
+    spinlist[spin.label] = spin;
+    return spinlist
+end
 
 

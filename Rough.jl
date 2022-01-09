@@ -8,7 +8,10 @@ include("Continuous_Model.jl")
 L = 10;
 r = 3.5;
 N = 100;
-
+Tpas = 0.35;
+Tact = 0.65;
+tau = 5.0;
+resistance = 10.0;
 steepness = 20.0;
 nr_pats = 10;
 
@@ -18,11 +21,20 @@ d = MvNormal(mu, sigma);
 patterns = rand(d, N);
 patterns_v = logistic_activation(patterns, steepness);
 
+activation = Activation_function(logistic_activation, steepness);
+
 bc = "open";
+systm = Systm(N, patterns_v, "periodic", L, Tpas, Tact, tau, resistance, activation);
+
 u = Uniform(0,10);
-systm = Systm(patterns_v, "periodic", L);
 positions = [rand(u,2) for _ in 1:N];
 vals = rand(u, N);
+
+mu = zeros(Float64, N);
+sigma = Matrix{Float64}(I, N, N);
+d = MvNormal(mu, sigma);
+etalist = sqrt(2*systm.Tact)*rand(d, 1);
+
 
 #spinlist = MutableLinkedList{Spin}();
 spinlist = Array{Spin}(undef, N);
@@ -30,7 +42,7 @@ spinlist = Array{Spin}(undef, N);
 for i in 1:N
     pos = Position(positions[i][1], positions[i][2]);
     #push!(spinlist, Spin(i,pos,vals[i],r,Array{Int8}(undef,), Array{Float64}(undef,), Array{Float64}(undef,)));
-    spin = Spin(i,pos,vals[i], r, Array{Int8}(undef,), Array{Float64}(undef,), Array{Float64}(undef,));
+    spin = Spin(i,pos,vals[i], r, Array{Int8}(undef,), Array{Float64}(undef,), Array{Float64}(undef,), etalist[i]);
     spinlist[i] = spin;
 end
 
