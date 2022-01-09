@@ -16,6 +16,7 @@ mutable struct Spin
     Jij::Array;
     Jij_flag::Array;
     Jijkl::Array;
+    Jijkl_flag::Array;
     eta::Float64
 end
 
@@ -92,7 +93,8 @@ function connection_matrices_raw(spin::Spin, systm::Systm)
     @einsum Jijkl[a,b,c,d] = local_pats[i, a]*local_pats[i, b]*local_pats[i, c]*local_pats[i, d];
     Jijkl = (1/(l*l*l))*Jijkl;
     Jijkl = Jijkl[1,:,:,:]
-    return Jij, Jijkl, Jij_flag
+    Jijkl_flag = 0*Jijkl;
+    return Jij, Jijkl, Jij_flag, Jijkl_flag
 end
 
 function averaged_Jij(spin1::Spin, spin2::Spin)
@@ -110,8 +112,40 @@ function averaged_Jij(spin1::Spin, spin2::Spin)
     end
 end
 
-#function averaged_Jijkl(spin1::Spin, spin2::Spin, spin3::Spin, spin4::Spin)
-#    x12 = findall(a->a==spin2.label, spin1.neighbors)
+function averaged_Jijkl(spin1::Spin, spin2::Spin, spin3::Spin, spin4::Spin)
+    x12 = findall(a->a==spin2.label, spin1.neighbors);
+    x13 = findall(a->a==spin3.label, spin1.neighbors);
+    x14 = findall(a->a==spin4.label, spin1.neighbors);
+    x21 = findall(a->a==spin1.label, spin2.neighbors);
+    x23 = findall(a->a==spin3.label, spin2.neighbors);
+    x24 = findall(a->a==spin4.label, spin2.neighbors);
+    x31 = findall(a->a==spin1.label, spin3.neighbors);
+    x32 = findall(a->a==spin2.label, spin3.neighbors);
+    x34 = findall(a->a==spin4.label, spin3.neighbors);
+    x41 = findall(a->a==spin1.label, spin4.neighbors);
+    x42 = findall(a->a==spin2.label, spin4.neighbors);
+    x43 = findall(a->a==spin3.label, spin4.neighbors);
+    x = [x12,x13,x14,x21,x23,x24,x31,x32,x34,x41,x42,x43]
+    y = [i==[] for i in x];
+    if any(y) || spin1.Jijkl_flag[x12,x13,x14]==1
+        return spin1, spin2, spin3, spin4
+    else
+        Jijkl1234 = (spin1.Jijkl[x12,x13,x14] + spin2.Jijkl[x21,x23,x24] + spin3.Jijkl[x31,x32,x34] + spin4.Jijkl[x41,x42,x43])/4;
+        spin1.Jijkl[x12,x13,x14] = Jijkl1234;
+        spin2.Jijkl[x21,x23,x24] = Jijkl1234;
+        spin3.Jijkl[x31,x32,x34] = Jijkl1234;
+        spin4.Jijkl[x41,x42,x43] = Jijkl1234;
+        spin1.Jijkl_flag[x12,x13,x14] .= 1;
+        spin2.Jijkl_flag[x21,x23,x24] .= 1;
+        spin3.Jijkl_flag[x31,x32,x34] .= 1;
+        spin4.Jijkl_flag[x41,x42,x43] .= 1;
+        return spin1, spin2, spin3, spin4;
+    end
+end
+
+        
+
+
 
 
 function connection_matrices(spinlist::Array{Spin}, systm::Systm)
@@ -119,6 +153,15 @@ function connection_matrices(spinlist::Array{Spin}, systm::Systm)
     for i in 1:N
         for j in 1:N
             spinlist[i], spinlist[j] = averaged_Jij(spinlist[i], spinlist[j]);
+        end
+    end
+    for i in 1:N
+        for j in 1:N
+            for k in 1:N
+                for l in 1:N
+                    spinlist[i],spinlist[j],spinlist[k],spinlist[l] = averaged_Jijkl(spinlist[i], spinlist[j],spinlist[k], spinlist[l]);
+                end
+            end
         end
     end
     return spinlist
