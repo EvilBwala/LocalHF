@@ -7,7 +7,7 @@ include("Continuous_Model.jl")
 
 L = 10;
 r = 3.5;
-N = 80;
+N = 1000;
 Tpas = 0.35;
 Tact = 0.65;
 tau = 5.0;
@@ -24,7 +24,7 @@ patterns_v = logistic_activation(patterns, steepness);
 activation = Activation_function(logistic_activation, steepness);
 
 bc = "open";
-systm = Systm(N, patterns_v, "periodic", L, Tpas, Tact, tau, resistance, activation);
+systm = Systm(N, patterns_v, "periodic", L, Tpas, Tact, tau, resistance, activation, "off");
 
 u = Uniform(0,10);
 positions = [rand(u,2) for _ in 1:N];
@@ -50,9 +50,17 @@ for i in 1:N
     spinlist[i].neighbors = find_neighbors(spinlist[i], systm, spinlist);
 end
 
-for i in 1:N
+@time for i in 1:N
     spinlist[i].Jij, spinlist[i].Jijkl, spinlist[i].Jij_flag, spinlist[i].Jijkl_flag = connection_matrices_raw(spinlist[i], systm);
     println(i);
 end
 
-spinlist = connection_matrices(spinlist, systm);
+@time spinlist = connection_matrices(spinlist, systm);
+
+tsteps = 1000;
+dt = 0.0001;
+@time for i in 1:tsteps
+    spin = spinlist[rand(1:N)];
+    spinlist = update_spin(spin, systm, spinlist, dt);
+    #println(i);
+end

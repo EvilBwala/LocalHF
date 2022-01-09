@@ -8,7 +8,7 @@ mutable struct Position
 end
 
 mutable struct Spin
-    label::Int8;
+    label::Int64;
     pos::Position;
     val::Float64;
     r::Float64;
@@ -34,6 +34,7 @@ struct Systm
     tau::Float64;
     resistance::Float64
     activation::Activation_function
+    quartic::String
 end
 
 """
@@ -88,15 +89,21 @@ function connection_matrices_raw(spin::Spin, systm::Systm)
     Jij = (1/l)*Jij;
     Jij = Jij[1, :];
     Jij_flag = 0*Jij;
-
-    Jijkl = zeros(Float64, l, l, l, l);
-    @einsum Jijkl[a,b,c,d] = local_pats[i, a]*local_pats[i, b]*local_pats[i, c]*local_pats[i, d];
-    Jijkl = (1/(l*l*l))*Jijkl;
-    Jijkl = Jijkl[1,:,:,:]
-    Jijkl_flag = 0*Jijkl;
+    
+    Jijkl = Array{Float64}(undef,);
+    Jijkl_flag = Array{Float64}(undef,);
+    if systm.quartic == "on"
+        Jijkl = zeros(Float64, l, l, l, l);
+        @einsum Jijkl[a,b,c,d] = local_pats[i, a]*local_pats[i, b]*local_pats[i, c]*local_pats[i, d];
+        Jijkl = (1/(l*l*l))*Jijkl;
+        Jijkl = Jijkl[1,:,:,:]
+        Jijkl_flag = 0*Jijkl;
+    end
     return Jij, Jijkl, Jij_flag, Jijkl_flag
 end
 
+
+# This averaging of Jij uses less memory but take more time.
 function averaged_Jij(spin1::Spin, spin2::Spin)
     x1 = findall(a->a==spin2.label, spin1.neighbors);
     x2 = findall(a->a==spin1.label, spin2.neighbors);
@@ -110,6 +117,28 @@ function averaged_Jij(spin1::Spin, spin2::Spin)
         spin2.Jij_flag[x2] .= 1;
         return spin1, spin2
     end
+end
+
+
+function averaged_Jij(spinlist::Array{Spin})
+    N = length(spinlist);
+    Jij_new = zeros(Float64, N, N);
+    for i in 1:N
+        temp_Jij = zeros(Float64, N, N);
+        spin = spinlist[i];
+        neighbor_list = spin.neighbors;
+        Jij = spin.Jij;
+        temp_Jij[spin.label, neighbor_list] = Jij;
+        temp_Jij[neighbor_list, spin.label] = Jij;
+        Jij_new = Jij_new + temp_Jij;
+    end
+    Jij_new = Jij_new/2;
+    for i in 1:N
+        spin = spinlist[i];
+        spinlist[i].Jij = Jij_new[spin.label, spin.neighbors];
+        spinlist[i].Jij_flag = 0*spinlist[i].Jij .+ 1;
+    end
+    return spinlist
 end
 
 function averaged_Jijkl(spin1::Spin, spin2::Spin, spin3::Spin, spin4::Spin)
@@ -150,16 +179,21 @@ end
 
 function connection_matrices(spinlist::Array{Spin}, systm::Systm)
     N = systm.N;
+    """
     for i in 1:N
         for j in 1:N
             spinlist[i], spinlist[j] = averaged_Jij(spinlist[i], spinlist[j]);
         end
     end
-    for i in 1:N
-        for j in 1:N
-            for k in 1:N
-                for l in 1:N
-                    spinlist[i],spinlist[j],spinlist[k],spinlist[l] = averaged_Jijkl(spinlist[i], spinlist[j],spinlist[k], spinlist[l]);
+    """
+    spinlist = averaged_Jij(spinlist);
+    if systm.quartic == "on"
+        for i in 1:N
+            for j in 1:N
+                for k in 1:N
+                    for l in 1:N
+                        spinlist[i],spinlist[j],spinlist[k],spinlist[l] = averaged_Jijkl(spinlist[i], spinlist[j],spinlist[k], spinlist[l]);
+                    end
                 end
             end
         end
@@ -196,7 +230,11 @@ function update_spin(spin::Spin, systm::Systm, spinlist::Array{Spin}, dt)
     local_state = [i.val for i in local_spins];
     local_state_v = systm.activation.function_type(local_state, systm.activation.steepness)
     @tensor begin force1 = local_state_v[a]*Jij[a]; end
-    @tensoropt begin force2 = Jijkl[a,b,c]*local_state_v[a]*local_state_v[b]*local_state_v[c]; end
+    if systm.quartic == "on"
+        @tensoropt begin force2 = Jijkl[a,b,c]*local_state_v[a]*local_state_v[b]*local_state_v[c]; end
+    else
+        force2 = 0;
+    end
     force = force1 + force2;
     spin.val = spin.val - dt*(force - spin.val/systm.resistance) + whitenoise[spin.label]*sqrt(dt) + spin.eta*dt; 
 
