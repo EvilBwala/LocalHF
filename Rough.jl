@@ -7,7 +7,7 @@ include("Continuous_Model.jl")
 
 L = 10;
 r = 3.5;
-N = 1000;
+N = 2000;
 Tpas = 0.35;
 Tact = 0.65;
 tau = 5.0;
@@ -52,15 +52,23 @@ end
 
 @time for i in 1:N
     spinlist[i].Jij, spinlist[i].Jijkl, spinlist[i].Jij_flag, spinlist[i].Jijkl_flag = connection_matrices_raw(spinlist[i], systm);
-    println(i);
+    #println(i);
 end
 
 @time spinlist = connection_matrices(spinlist, systm);
 
-tsteps = 1000;
+tsteps = N;
 dt = 0.0001;
 @time for i in 1:tsteps
     spin = spinlist[rand(1:N)];
     spinlist = update_spin(spin, systm, spinlist, dt);
     #println(i);
 end
+
+batches = 100;
+batchsize = Int(N/batches);
+@time for i in 1:batches
+    batchlist = rand(1:N, batchsize);
+    spinlist = update_spin_batch(batchlist, systm, spinlist, dt);
+end
+

@@ -8,16 +8,17 @@ mutable struct Position
 end
 
 mutable struct Spin
-    label::Int64;
-    pos::Position;
-    val::Float64;
-    r::Float64;
-    neighbors::Array;
-    Jij::Array;
-    Jij_flag::Array;
-    Jijkl::Array;
-    Jijkl_flag::Array;
-    eta::Float64
+    label::Int64;       # Labels spin with an integer
+    pos::Position;      # Position of the spin
+    val::Float64;       # Value of the spin/neuron
+    r::Float64;         # Radius of influence of the spin
+    neighbors::Array;   # Neighbors of the spin
+    Jij::Array;         # The quadratic connections of the spin
+    Jij_flag::Array;    # Flag to determine whether the quadratic connection matrix has been processed
+                        # 0 for raw and 1 for processed
+    Jijkl::Array;       # The quartic connections of the spin
+    Jijkl_flag::Array;  # Flag similar to described above
+    eta::Float64        # The active field value at the spin
 end
 
 struct Activation_function
@@ -25,16 +26,16 @@ struct Activation_function
     steepness::Float64
 end
 struct Systm
-    N::Int64
-    patterns::Array;
-    bc::String;
-    L::Float64;
-    Tpas::Float64;
-    Tact::Float64;
-    tau::Float64;
-    resistance::Float64
-    activation::Activation_function
-    quartic::String
+    N::Int64                        # Number of spins in the system
+    patterns::Array;                # patterns stored in the system
+    bc::String;                     # Boundary conditions, "periodic" or "open"
+    L::Float64;                     # Lattice constant
+    Tpas::Float64;                  # Passive temperature
+    Tact::Float64;                  # Active temperature
+    tau::Float64;                   # Persistence time
+    resistance::Float64             # Resistance
+    activation::Activation_function # Activation Function for the neurons
+    quartic::String                 # Flag to determine whether to include quartic interactions
 end
 
 """
@@ -45,7 +46,9 @@ function logistic_activation(u::Array, steepness::Float64)
     return f_u;
 end
 
-
+# The following functions are for initializing the system
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------
 function distance(spin1::Spin, spin2::Spin, systm::Systm)::Float64
     L = systm.L;
     bc = systm.bc;
@@ -172,10 +175,6 @@ function averaged_Jijkl(spin1::Spin, spin2::Spin, spin3::Spin, spin4::Spin)
     end
 end
 
-        
-
-
-
 
 function connection_matrices(spinlist::Array{Spin}, systm::Systm)
     N = systm.N;
@@ -201,14 +200,15 @@ function connection_matrices(spinlist::Array{Spin}, systm::Systm)
     return spinlist
 end
 
+#--------------------------------------------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-
-
+#-------------------------------------------------------------------------------------------------------------------------
+# Function to update a spin at Random
 
 function update_spin(spin::Spin, systm::Systm, spinlist::Array{Spin}, dt)
     N = systm.N;
-    #-------------------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------
     # Update the whitenoise and AOUP noise in the system
     mu = zeros(Float64, N);
     sigma = Matrix{Float64}(I, N, N);
@@ -220,8 +220,8 @@ function update_spin(spin::Spin, systm::Systm, spinlist::Array{Spin}, dt)
     for i in 1:N
         spinlist[i].eta = eta_new[i]
     end
-    #-------------------------------------------------------------------------------------------------
-    
+    #---------------------------------------------------------------------------------------------------------------------
+
     Jij = spin.Jij;
     Jijkl = spin.Jijkl;
     local_spins = spinlist[spin.neighbors];
@@ -242,4 +242,50 @@ function update_spin(spin::Spin, systm::Systm, spinlist::Array{Spin}, dt)
     return spinlist
 end
 
+#-------------------------------------------------------------------------------------------------------------------------
 
+
+function update_spin_batch(batchlist::Array, systm::Systm, spinlist::Array{Spin}, dt)
+    N = systm.N;
+    batchsize = length(batchlist);
+    Jij_new = zeros(Float64, N, N);
+
+    for j in 1:batchsize
+        spin = spinlist[batchlist[j]];
+        ng = spin.neighbors;
+        Jij_new[spin.label, ng] = spin.Jij;
+        Jij_new[ng, spin.label] = spin.Jij;
+    end
+    #---------------------------------------------------------------------------------------------------------------------
+    # Update the whitenoise and AOUP noise in the system
+    mu = zeros(Float64, N);
+    sigma = Matrix{Float64}(I, N, N);
+    d = MvNormal(mu, sigma);
+    whitenoise = sqrt(2*systm.Tpas)*rand(d, 1);
+    aoup_noise = sqrt(2*systm.Tact)*rand(d, 1);
+    eta_state = [i.eta for i in spinlist];
+    eta_new = (systm.tau/(systm.tau + dt))*eta_state + (1/(systm.tau + dt))*aoup_noise*sqrt(dt);
+    for i in 1:N
+        spinlist[i].eta = eta_new[i]
+    end
+    #---------------------------------------------------------------------------------------------------------------------
+
+    
+
+    state = [i.val for i in spinlist];
+    state_v = systm.activation.function_type(state, systm.activation.steepness)
+    force1 = Array{Float64}(undef, N);
+    @tensor begin force1[b] = state_v[a]*Jij_new[a,b]; end
+    if systm.quartic == "on"
+        @tensoropt begin force2 = Jijkl[a,b,c]*local_state_v[a]*local_state_v[b]*local_state_v[c]; end
+    else
+        force2 = 0;
+    end
+    force = force1;
+    state = state - dt*(force - state/systm.resistance) + whitenoise*sqrt(dt) + eta_new*dt; 
+
+    for i in 1:batchsize
+        spinlist[batchlist[i]].val = state[batchlist[i]];
+    end
+    return spinlist
+end
