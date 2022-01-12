@@ -28,6 +28,7 @@ end
 struct Systm
     N::Int64                        # Number of spins in the system
     patterns::Array;                # patterns stored in the system
+    pattern_type::String;           # Type of patterns, u for unactivated, v for activated
     bc::String;                     # Boundary conditions, "periodic" or "open"
     L::Float64;                     # Lattice constant
     Tpas::Float64;                  # Passive temperature
@@ -85,6 +86,9 @@ end
 function connection_matrices_raw(spin::Spin, systm::Systm)
     local_spins = spin.neighbors;
     local_pats = systm.patterns[:, local_spins];
+    if systm.pattern_type == "u"
+        local_pats = systm.activation.function_type(local_pats, systm.activation.steepness);
+    end
     l = length(local_spins);
     Jij = zeros(Float64, l, l);
     @tensor begin Jij[a,b] = local_pats[i, a]*local_pats[i, b] end;
@@ -248,6 +252,7 @@ end
 function update_spin_batch(batchlist::Array, systm::Systm, spinlist::Array{Spin}, dt)
     N = systm.N;
     batchsize = length(batchlist);
+    batch_dt = (dt*batchsize)/N;
     Jij_new = zeros(Float64, N, N);
 
     for j in 1:batchsize
@@ -264,13 +269,11 @@ function update_spin_batch(batchlist::Array, systm::Systm, spinlist::Array{Spin}
     whitenoise = sqrt(2*systm.Tpas)*rand(d, 1);
     aoup_noise = sqrt(2*systm.Tact)*rand(d, 1);
     eta_state = [i.eta for i in spinlist];
-    eta_new = (systm.tau/(systm.tau + dt))*eta_state + (1/(systm.tau + dt))*aoup_noise*sqrt(dt);
+    eta_new = (systm.tau/(systm.tau + batch_dt))*eta_state + (1/(systm.tau + batch_dt))*aoup_noise*sqrt(batch_dt);
     for i in 1:N
         spinlist[i].eta = eta_new[i]
     end
     #---------------------------------------------------------------------------------------------------------------------
-
-    
 
     state = [i.val for i in spinlist];
     state_v = systm.activation.function_type(state, systm.activation.steepness)
