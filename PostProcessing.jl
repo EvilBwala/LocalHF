@@ -5,7 +5,7 @@ using TensorOperations
 function overlap(spinlist::Array{Spin}, pattern_no::Int64, systm::Systm)
     pattern = systm.patterns[pattern_no, :];
     if systm.pattern_type == "u"
-        pattern = systm.activation.function_type(local_pats, systm.activation.steepness);
+        pattern = systm.activation.function_type(pattern, systm.activation.steepness);
     end
     state = [i.val for i in spinlist];
     state_v = systm.activation.function_type(state, systm.activation.steepness)

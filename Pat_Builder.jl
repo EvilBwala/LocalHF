@@ -2,9 +2,9 @@ using Distributions
 using LinearAlgebra
 using NPZ
 
-N = 1000;
-nr_pats = 10;
-L = 10;
+N = parse(Int, ARGS[1]);
+nr_pats = parse(Int, ARGS[2]);
+L = parse(Float64, ARGS[3]);
 
 
 mu = zeros(Float64, nr_pats);
@@ -15,7 +15,7 @@ patterns = rand(d, N);
 u = Uniform(0,L);
 positions = rand(u, 2, N);
 
-npzwrite("N$(N).nrpats$(nr_pats).npz", Dict("Patterns_u"=> patterns, "Positions"=> positions));
+npzwrite("Patterns.N$(ARGS[1]).nrpats$(ARGS[2]).L$(ARGS[3]).npz", Dict("Patterns_u"=> patterns, "Positions"=> positions));
 
 #---------------------------------------------------------------------------------------------------
 # ROUGH

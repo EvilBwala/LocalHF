@@ -1,19 +1,18 @@
 using TensorOperations
 using LinearAlgebra
 using Distributions
-using DataStructures
 using Einsum
 using NPZ
 include("Continuous_Model.jl")
 include("PostProcessing.jl")
 
-"""
+
 N = parse(Int, ARGS[1]);
 L = parse(Float64, ARGS[2]);
 nr_pats = parse(Int, ARGS[3]);
 r = parse(Float64, ARGS[4]);
-Tpas = parse(Float64, ARGS[5]);
-Tact = parse(Float64, ARGS[6]);
+Teff = parse(Float64, ARGS[5]);
+frac = parse(Float64, ARGS[6]);
 tau = parse(Float64, ARGS[7]);
 resistance = parse(Float64, ARGS[8]);
 steepness = parse(Float64, ARGS[9]);
@@ -21,25 +20,25 @@ pat_idx = parse(Int, ARGS[10]);
 dt = parse(Float64, ARGS[11]);
 tsteps = parse(Int, ARGS[12])
 batches = parse(Int, ARGS[13])
-"""
+
 #---------------------------------------------------------
 # For Rough Runs
 
-
+"""
 N = 1000
-L = 3.5
+L = 10;
 nr_pats = 10
 r = 3.5;
-Tpas = 0.35;
-Tact = 0.65;
+Teff = 0.4;
+frac = 0.5;
 tau = 5.0;
 resistance = 10.0;
 steepness = 20.0;
 pat_idx = 1;
 dt = 0.05;
-tsteps = 5;
-batches = 10;
-
+tsteps = 1000;
+batches = 1;
+"""
 
 """
 mu = zeros(Float64, nr_pats);
@@ -48,6 +47,9 @@ d = MvNormal(mu, sigma);
 patterns = rand(d, N);
 patterns_v = logistic_activation(patterns, steepness);
 """
+
+Tpas = Teff*frac;
+Tact = Teff*(1-frac);
 
 #---------------------------------------------------------
 
@@ -116,8 +118,8 @@ end
 # Evolve the system for tsteps
 #------------------------------------------------------------------------------------------------------------------
 
-
 mlist = zeros(Float64, tsteps);
+patchymlist = zeros(Float64, tsteps);
 batchsize = Int(N/batches);
 
 for t in 1:tsteps
@@ -126,7 +128,17 @@ for t in 1:tsteps
         batchlist = rand(1:N, batchsize);
         spinlist = update_spin_batch(batchlist, systm, spinlist, dt);
     end
-    mlist[t] = patchy_overlap(spinlist, 1, systm);
+    mlist[t] = overlap(spinlist, pat_idx, systm);
+    patchymlist[t] = patchy_overlap(spinlist, pat_idx, systm);
 end
 
-npzwrite("mlist.npz", Dict("OverlapList" => mlist));
+npzwrite("mlist.N$(ARGS[1]).L$(ARGS[2]).nrpat$(ARGS[3]).r$(ARGS[4]).Teff$(ARGS[5]).frac$(ARGS[6]).tau$(ARGS[7]).R$(ARGS[8]).
+s$(ARGS[9]).patidx$(ARGS[10]).dt$(ARGS[11]).tsteps$(ARGS[12]).b$(ARGS[13]).npz", Dict("OverlapList" => mlist, "PatchyOverlapList" => patchymlist));
+
+"""
+using Plots
+using NPZ
+mfile = npzread("mlist.N1000.L10.nrpat10.r3.5.Teff0.4.frac0.5.tau5.0.R10.0.s20.0.patidx2.dt0.05.tsteps100.b10.npz");
+mlist = mfile["OverlapList"];
+plot(mlist)
+"""

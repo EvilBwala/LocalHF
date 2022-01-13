@@ -240,7 +240,7 @@ function update_spin(spin::Spin, systm::Systm, spinlist::Array{Spin}, dt)
         force2 = 0;
     end
     force = force1 + force2;
-    spin.val = spin.val - dt*(force - spin.val/systm.resistance) + whitenoise[spin.label]*sqrt(dt) + spin.eta*dt; 
+    spin.val = spin.val + dt*(force - spin.val/systm.resistance) + whitenoise[spin.label]*sqrt(dt) + spin.eta*dt; 
 
     spinlist[spin.label] = spin;
     return spinlist
@@ -285,7 +285,7 @@ function update_spin_batch(batchlist::Array, systm::Systm, spinlist::Array{Spin}
         force2 = 0;
     end
     force = force1;
-    state = state - dt*(force - state/systm.resistance) + whitenoise*sqrt(dt) + eta_new*dt; 
+    state = state + dt*(force - state/systm.resistance) + whitenoise*sqrt(dt) + eta_new*dt; 
 
     for i in 1:batchsize
         spinlist[batchlist[i]].val = state[batchlist[i]];
