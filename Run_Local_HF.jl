@@ -18,8 +18,9 @@ resistance = parse(Float64, ARGS[8]);
 steepness = parse(Float64, ARGS[9]);
 pat_idx = parse(Int, ARGS[10]);
 dt = parse(Float64, ARGS[11]);
-tsteps = parse(Int, ARGS[12])
-batches = parse(Int, ARGS[13])
+tsteps = parse(Int, ARGS[12]);
+batches = parse(Int, ARGS[13]);
+err_frac = parse(Float64, ARGS[14]);
 
 #---------------------------------------------------------
 # For Rough Runs
@@ -56,7 +57,7 @@ Tact = Teff*(1-frac);
 #------------------------------------------------------------------------
 # Read patterns and spin positions from Patterns.npz File
 #------------------------------------------------------------------------
-patfile = npzread("N$(N).nrpats$(nr_pats).npz");
+patfile = npzread("Patterns.N$(ARGS[1]).nrpats$(ARGS[3]).L$(ARGS[2]).npz");
 patterns = patfile["Patterns_u"];
 patterns_v = logistic_activation(patterns, steepness);
 positions = patfile["Positions"]; 
@@ -73,6 +74,10 @@ systm = Systm(N, patterns, "u", "periodic", L, Tpas, Tact, tau, resistance, acti
 # Initialize the values of the spins and the eta variables
 #----------------------------------------------------------------------------------------------------
 vals = patterns[pat_idx,:];
+bn = Binomial(1, err_frac/2);
+bn_numbers = rand(bn, N);
+vals = vals - 2 .* bn_numbers .* vals;
+
 
 mu = zeros(Float64, N);
 sigma = Matrix{Float64}(I, N, N);
@@ -132,8 +137,7 @@ for t in 1:tsteps
     patchymlist[t] = patchy_overlap(spinlist, pat_idx, systm);
 end
 
-npzwrite("mlist.N$(ARGS[1]).L$(ARGS[2]).nrpat$(ARGS[3]).r$(ARGS[4]).Teff$(ARGS[5]).frac$(ARGS[6]).tau$(ARGS[7]).R$(ARGS[8]).
-s$(ARGS[9]).patidx$(ARGS[10]).dt$(ARGS[11]).tsteps$(ARGS[12]).b$(ARGS[13]).npz", Dict("OverlapList" => mlist, "PatchyOverlapList" => patchymlist));
+npzwrite("mlist.N$(ARGS[1]).L$(ARGS[2]).nrpat$(ARGS[3]).r$(ARGS[4]).Teff$(ARGS[5]).frac$(ARGS[6]).tau$(ARGS[7]).R$(ARGS[8]).s$(ARGS[9]).patidx$(ARGS[10]).dt$(ARGS[11]).tsteps$(ARGS[12]).b$(ARGS[13]).npz", Dict("OverlapList" => mlist, "PatchyOverlapList" => patchymlist));
 
 """
 using Plots
